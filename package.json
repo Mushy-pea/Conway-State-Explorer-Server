@@ -1,0 +1,14 @@
+{
+  "name": "Conway-State-Explorer-Server",
+  "version": "1.0.0",
+  "description": "Server side component of the Conway-State-Explorer project.",
+  "main": "server.mjs",
+  "author": "Steven Tinsley <steven.tinsley81@gmail.com>",
+  "license": "UNLICENSED",
+  "private": false,
+  "dependencies": {
+    "@types/node": "^17.0.21",
+    "mysql": "^2.18.1",
+    "typescript": "^4.5.5"
+  }
+}
