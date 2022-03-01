@@ -1,7 +1,8 @@
 import { resetBoardArray, BoardCell, boardCell, getCellState, setCellState, cellUpdaterFunctions1 }
 from './GameLogicTypes';
 
-function deserialisePattern(pattern : string) : BoardCell[] {
+function deserialisePattern(pattern : string)
+         : {gameBoard: BoardCell[], min : number, max : number} {
   const patternLines = pattern.split("\n");
   let maxLineLength = 0;
   const columnLength = patternLines.length;
@@ -17,7 +18,9 @@ function deserialisePattern(pattern : string) : BoardCell[] {
   const max = boardArraySize - 1;
   const min = -max;
   const gameBoardObject = {
-    gameBoard: []
+    gameBoard: [],
+    min: min,
+    max: max
   };
   gameBoardObject.gameBoard = Array(boardArraySize).fill(boardCell)
     .map(() => new Array(boardArraySize).fill(boardCell));
@@ -34,20 +37,21 @@ function deserialisePattern(pattern : string) : BoardCell[] {
     }
     i++;
   });
-  return gameBoardObject.gameBoard;
+  return gameBoardObject;
 }
 
-function reserialisePattern(pattern : BoardCell[]) : string {
+function reserialisePattern(gameBoardObject : {gameBoard: BoardCell[], min : number, max : number})
+         : string {
   const liveCells = [];
-  for (let i = 0; i <= pattern.length - 1; i++) {
-    for (let j = 0; j <= pattern.length; j++) {
-      if (getCellState(pattern, i, j).cellState === true) {
+  for (let i = gameBoardObject.min; i <= gameBoardObject.max; i++) {
+    for (let j = gameBoardObject.min; j <= gameBoardObject.max; j++) {
+      if (getCellState(gameBoardObject.gameBoard, i, j).cellState === true) {
         liveCells.push({i: i, j: j})
       }
     }
   }
   const patternObject = {
-    boardArraySize: pattern.length,
+    boardArraySize: gameBoardObject.max + 1,
     liveCells: liveCells
   };
   return JSON.stringify(patternObject);
