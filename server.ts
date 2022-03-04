@@ -162,7 +162,7 @@ function openDBConnection() : Promise<{success : boolean, connection : any}> {
   return connectPromise;
 }
 
-function closeDBConnection(connection) {
+function closeDBConnection(connection) : void {
   connection.end();
   console.log("The database connection has been closed.");
 }
@@ -177,7 +177,74 @@ async function getPattern(patternId : number)
     closeDBConnection(connection);
     return {success: false, result: null};
   });
-  const result = new Promise<{success : boolean, result : GetPatternResult}>((resolve, reject) => {
+  const result = new Promise<{success : boolean, result : GetPatternResult | null}>((resolve, reject) => {
+    if (connectResult.success === false || queryResult.success === false) {
+      reject({
+        success: false,
+        result: null
+      });
+    }
+    else {
+      closeDBConnection(connection);
+      resolve({
+        success: true,
+        result: queryResult.result
+      });
+    }
+  });
+  return result;
+}
+
+type CatalogueReference = {
+  Pattern_id : number,
+  Name : string
+};
+
+function getCatalogueQuery(connection, searchString : string)
+                          : Promise<{success : boolean, result : CatalogueReference[] | null}> {
+  const filter = /[A-Za-z0-9 _.-]*/;
+  const safeSearchString = searchString.match(filter)[0];
+  let query;
+  if (searchString === "") {
+    query = `SELECT Pattern_id, Name FROM pattern_catalogue
+             ORDER BY Name`;
+  }
+  else {
+    query = `SELECT Pattern_id, Name FROM pattern_catalogue
+             WHERE SUBSTRING(Name, 1, ${safeSearchString.length}) = "${safeSearchString}"
+             ORDER BY Name`;
+  }
+  console.log(`getCatalogueQuery -> query: ${query}`);
+  const queryResolution =
+    new Promise<{success : boolean, result : CatalogueReference[] | null}>((resolve, reject) => {
+      connection.query(query, (error, queryResult) => {
+        if (error) {
+          console.error(error);
+          reject({
+            success: false,
+            result: null
+          });
+        }
+        else {
+          resolve({
+            success: true,
+            result: queryResult
+          });
+        }
+      });
+    });
+  return queryResolution;
+}
+
+async function getCatalogue(searchString : string)
+                           : Promise<{success : boolean, result : CatalogueReference[] | null}> {
+  const connectResult = await openDBConnection().catch();
+  const connection = connectResult.connection;
+  const queryResult = await getCatalogueQuery(connection, searchString).catch(() => {
+    closeDBConnection(connection);
+    return {success: false, result: null};
+  });
+  const result = new Promise<{success : boolean, result : CatalogueReference[] | null}>((resolve, reject) => {
     if (connectResult.success === false || queryResult.success === false) {
       reject({
         success: false,
@@ -215,6 +282,19 @@ function main() : void {
       if (result.success) {
         response.status(200).send(result.result).end();
       }
+    }
+  });
+
+  app.get("/get_catalogue", async function(request, response) {
+    console.log("");
+    const searchString = request.query.searchString;
+    console.log(`main -> searchString: ${searchString}`);
+    const result = await getCatalogue(searchString).catch(() => {
+      response.status(404).send("There was a problem retrieving the pattern catalogue data.").end();
+      return {success: false, result: null};
+    });
+    if (result.success) {
+      response.status(200).send(result.result).end();
     }
   });
 
