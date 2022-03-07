@@ -55,6 +55,13 @@ type PatternObject = {
   }[]                  
 };
 
+type PatternPackage = {
+  name : string,
+  username : string,
+  comments : string,
+  patternObject: PatternObject
+};
+
 // This function takes the object returned by deserialisePattern and returns a JSON string that
 // represents the game board pattern.  This two stage representation change ensures the pattern
 // will be auto centred around the coordinate system origin on the client side.
@@ -73,6 +80,39 @@ function reserialisePattern(gameBoardObject : {gameBoard : BoardCell[], min : nu
     liveCells: liveCells
   };
   return patternObject;
+}
+
+// This function converts a new game board pattern received from the client into the string
+// representation used in the database.
+function convertPattern(newPattern : PatternObject) : string {
+  const max = newPattern.boardArraySize - 1;
+  const min = -max;
+  const gameBoardObject = {
+    gameBoard: [],
+    min: min,
+    max: max
+  };
+  gameBoardObject.gameBoard = Array(newPattern.boardArraySize).fill(boardCell)
+    .map(() => new Array(newPattern.boardArraySize).fill(boardCell));
+  resetBoardArray(gameBoardObject.gameBoard, boardCell, max, null);
+  newPattern.liveCells.forEach(cell => {
+    setCellState(gameBoardObject.gameBoard, true, 0, cellUpdaterFunctions1, cell.i, cell.j);
+  });
+
+  let patternString = "";
+  for (let i = gameBoardObject.min; i <= gameBoardObject.max; i++) {
+    for (let j = gameBoardObject.min; j <= gameBoardObject.max; j++) {
+      if (getCellState(gameBoardObject.gameBoard, i, j).cellState === true) {
+        patternString += "O";
+      }
+      else {
+        patternString += ".";
+      }
+    }
+    patternString += "\n";
+  }
+  console.log(`convertPattern -> patternString: ${patternString}`);
+  return patternString.substring(0, patternString.length - 1);
 }
 
 function openDBConnection() : Promise<any> {
@@ -114,20 +154,14 @@ function closeDBConnection(connection) : void {
   console.log("The database connection has been closed.");
 }
 
-type GetPatternResult = {
-  username : string,
-  comments : string,
-  patternObject: PatternObject
-}
-
 // This function queries the database by Pattern_id to retrieve a game board pattern and 
 // associated metadata.
-function getPatternQuery(connection, patternId : number) : Promise<GetPatternResult> {
-  const sql = `SELECT Username, Comments, Pattern FROM pattern_catalogue
-               WHERE Pattern_id = ${patternId}`;
+function getPatternQuery(connection, patternId : number) : Promise<PatternPackage> {
+  const query = `SELECT Name, Username, Comments, Pattern FROM pattern_catalogue
+                 WHERE Pattern_id = ${patternId}`;
   const queryResolution =
-    new Promise<GetPatternResult>((resolve, reject) => {
-      connection.query(sql, (error, queryResult) => {
+    new Promise<PatternPackage>((resolve, reject) => {
+      connection.query(query, (error, queryResult) => {
         if (error) {
           console.error(error);
           reject(null);
@@ -137,10 +171,11 @@ function getPatternQuery(connection, patternId : number) : Promise<GetPatternRes
           reject(null);
         }
         else {
-          const {Username, Comments, Pattern} = queryResult[0];
+          const {Name, Username, Comments, Pattern} = queryResult[0];
           const gameBoardObject = deserialisePattern(Pattern);
           const patternObject = reserialisePattern(gameBoardObject);
           resolve({
+            name: Name,
             username: Username,
             comments: Comments,
             patternObject: patternObject
@@ -153,9 +188,8 @@ function getPatternQuery(connection, patternId : number) : Promise<GetPatternRes
 
 // This function manages connecting to the database and attempting to retrieve the requested
 // game board pattern from it (behind API endpoint get_pattern).
-async function getPattern(patternId : number) : Promise<GetPatternResult> {
-  let queryResult, connection;
-  let success = true;
+async function getPattern(patternId : number) : Promise<PatternPackage> {
+  let queryResult, connection, success = true;
   try {
     connection = await openDBConnection();
     queryResult = await getPatternQuery(connection, patternId);
@@ -165,7 +199,7 @@ async function getPattern(patternId : number) : Promise<GetPatternResult> {
     closeDBConnection(connection);
     success = false;
   }
-  const result = new Promise<GetPatternResult>((resolve, reject) => {
+  const result = new Promise<PatternPackage>((resolve, reject) => {
     if (success) {
       resolve(queryResult);
     }
@@ -213,8 +247,7 @@ function getCatalogueQuery(connection, searchString : string) : Promise<Catalogu
 // This function manages connecting to the database and attempting to retrieve a catalogue of
 // available game board patterns from it (behind API endpoint get_catalogue).
 async function getCatalogue(searchString : string) : Promise<CatalogueReference[]> {
-  let queryResult, connection;
-  let success = true;
+  let queryResult, connection, success = true;
   try {
     connection = await openDBConnection();
     queryResult = await getCatalogueQuery(connection, searchString);
@@ -235,38 +268,95 @@ async function getCatalogue(searchString : string) : Promise<CatalogueReference[
   return result;
 }
 
+// This function queries the database in order to add a new game board pattern.
+function addPatternQuery(connection, newPattern : PatternPackage) : Promise<boolean> {
+  const patternString = convertPattern(newPattern.patternObject);
+  const query = `INSERT INTO pattern_catalogue (Name, Username, Comments, Pattern)
+                 VALUES ("${newPattern.name}", "${newPattern.username}", "${newPattern.comments}",
+                 "${patternString}")`;
+  const queryResolution = new Promise<boolean>((resolve, reject) => {
+    connection.query(query, error => {
+      if (error) {
+        console.error(error);
+        reject(false);
+      }
+      else {
+        console.log("A new pattern has been added to the catalogue.");
+        resolve(true);
+      }
+    });
+  });
+  return queryResolution;
+}
+
+// This function manages connecting to the database and adding a new game board pattern submitted by
+// the client.
+async function addPattern(newPattern : PatternPackage) : Promise<boolean> {
+  let connection, queryResult, success = true;
+  try {
+    connection = await openDBConnection();
+    queryResult = await addPatternQuery(connection, newPattern);
+    closeDBConnection(connection);
+  }
+  catch(error) {
+    closeDBConnection(connection);
+    success = false;
+  }
+  const result = new Promise<boolean>((resolve, reject) => {
+    if (success) {
+      resolve(queryResult);
+    }
+    else {
+      reject(false);
+    }
+  });
+  return result;
+}
+
 function main() : void {
   const express = require("express");
   const app = express();
   const PORT = process.env.PORT || 8080;
+  app.use(express.json());
 
-  app.get("/get_pattern", async function(request, response) {
+  app.get("/get_pattern", async function(req, res) {
     console.log("");
-    const patternId = parseInt(request.query.patternId);
+    const patternId = parseInt(req.query.patternId);
     if (patternId !== patternId) {
       console.error("get_pattern request received with non - numeric patternId query field.");
-      response.status(404).send("The requested patternId could not be found.").end();
+      res.status(404).send("The requested patternId could not be found.").end();
     }
     else {
       try {
         const result = await getPattern(patternId);
-        response.status(200).send(result).end();
+        res.status(200).send(result).end();
       }
       catch(error) {
-        response.status(404).send("The requested patternId could not be found.").end();
+        res.status(404).send("The requested patternId could not be found.").end();
       }
     }   
   });
 
-  app.get("/get_catalogue", async function(request, response) {
+  app.get("/get_catalogue", async function(req, res) {
     console.log("");
-    const searchString = request.query.searchString;
+    const searchString = req.query.searchString;
     try {
       const result = await getCatalogue(searchString);
-      response.status(200).send(result).end();
+      res.status(200).send(result).end();
     }
     catch(error) {
-      response.status(404).send("There was a problem retrieving the pattern catalogue data.").end();
+      res.status(404).send("There was a problem retrieving the pattern catalogue data.").end();
+    }
+  });
+
+  app.post("/add_pattern", (req, res) => {
+    console.log("");
+    try {
+      addPattern(req.body);
+      res.status(202).end();
+    }
+    catch(error) {
+      res.status(406).end();
     }
   });
 
