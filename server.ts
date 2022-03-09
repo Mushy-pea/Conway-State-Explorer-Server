@@ -111,7 +111,6 @@ function convertPattern(newPattern : PatternObject) : string {
     }
     patternString += "\n";
   }
-  console.log(`convertPattern -> patternString: ${patternString}`);
   return patternString.substring(0, patternString.length - 1);
 }
 
@@ -201,6 +200,7 @@ async function getPattern(patternId : number) : Promise<PatternPackage> {
   }
   const result = new Promise<PatternPackage>((resolve, reject) => {
     if (success) {
+      console.log(`Record with Pattern_id: ${patternId} has been retrieved from the database.`);
       resolve(queryResult);
     }
     else {
@@ -259,6 +259,8 @@ async function getCatalogue(searchString : string) : Promise<CatalogueReference[
   }
   const result = new Promise<CatalogueReference[]>((resolve, reject) => {
     if (success) {
+      console.log(`A catalogue retrieval request has been serviced for search string:\
+                   ${searchString}`);
       resolve(queryResult);
     }
     else {
@@ -270,9 +272,13 @@ async function getCatalogue(searchString : string) : Promise<CatalogueReference[
 
 // This function queries the database in order to add a new game board pattern.
 function addPatternQuery(connection, newPattern : PatternPackage) : Promise<boolean> {
+  const filter = /[A-Za-z0-9 _.-]*/;
+  const safeName = newPattern.name.match(filter)[0];
+  const safeUsername = newPattern.username.match(filter)[0];
+  const safeComments = newPattern.comments.match(filter)[0];
   const patternString = convertPattern(newPattern.patternObject);
   const query = `INSERT INTO pattern_catalogue (Name, Username, Comments, Pattern)
-                 VALUES ("${newPattern.name}", "${newPattern.username}", "${newPattern.comments}",
+                 VALUES ("${safeName}", "${safeUsername}", "${safeComments}",
                  "${patternString}")`;
   const queryResolution = new Promise<boolean>((resolve, reject) => {
     connection.query(query, error => {
@@ -281,7 +287,6 @@ function addPatternQuery(connection, newPattern : PatternPackage) : Promise<bool
         reject(false);
       }
       else {
-        console.log("A new pattern has been added to the catalogue.");
         resolve(true);
       }
     });
@@ -290,7 +295,7 @@ function addPatternQuery(connection, newPattern : PatternPackage) : Promise<bool
 }
 
 // This function manages connecting to the database and adding a new game board pattern submitted by
-// the client.
+// the client (behind API endpoint add_pattern).
 async function addPattern(newPattern : PatternPackage) : Promise<boolean> {
   let connection, queryResult, success = true;
   try {
@@ -304,7 +309,53 @@ async function addPattern(newPattern : PatternPackage) : Promise<boolean> {
   }
   const result = new Promise<boolean>((resolve, reject) => {
     if (success) {
+      console.log("A new pattern has been added to the database.");
       resolve(queryResult);
+    }
+    else {
+      reject(false);
+    }
+  });
+  return result;
+}
+
+// This function queries the database in order to delete a game board pattern.
+function deletePatternQuery(connection, patternId : number, username : string) : Promise<number>{
+  const filter = /[A-Za-z0-9 _.-]*/;
+  const safeUsername = username.match(filter)[0];
+  const query = `DELETE FROM pattern_catalogue
+                 WHERE Pattern_id = ${patternId} AND Username = "${safeUsername}"`;
+  const queryResolution = new Promise<number>((resolve, reject) => {
+    connection.query(query, (error, queryResult) => {
+      if (error) {
+        console.error(error);
+        reject(0);
+      }
+      else {
+        resolve(queryResult.affectedRows);
+      }
+    });
+  });
+  return queryResolution;
+}
+
+// This function manages connecting to the database and deleting a catalogue record at the
+// request of an authorised user (behind API endpoint delete_pattern).
+async function deletePattern(patternId : number, username : string) : Promise<boolean> {
+  let connection, queryResult, success = true;
+  try {
+    connection = await openDBConnection();
+    queryResult = await deletePatternQuery(connection, patternId, username);
+    closeDBConnection(connection);
+  }
+  catch(error) {
+    closeDBConnection(connection);
+    success = false;
+  }
+  const result = new Promise<boolean>((resolve, reject) => {
+    if (success && queryResult === 1) {
+      console.log(`The database record with patternId: ${patternId} has been deleted`);
+      resolve(true);
     }
     else {
       reject(false);
@@ -325,15 +376,14 @@ function main() : void {
     if (patternId !== patternId) {
       console.error("get_pattern request received with non - numeric patternId query field.");
       res.status(404).send("The requested patternId could not be found.").end();
+      return;
     }
-    else {
-      try {
-        const result = await getPattern(patternId);
-        res.status(200).send(result).end();
-      }
-      catch(error) {
-        res.status(404).send("The requested patternId could not be found.").end();
-      }
+    try {
+      const result = await getPattern(patternId);
+      res.status(200).send(result).end();
+    }
+    catch(error) {
+      res.status(404).send("The requested patternId could not be found.").end();
     }   
   });
 
@@ -349,10 +399,27 @@ function main() : void {
     }
   });
 
-  app.post("/add_pattern", (req, res) => {
+  app.post("/add_pattern", async function(req, res) {
     console.log("");
     try {
-      addPattern(req.body);
+      await addPattern(req.body);
+      res.status(202).end();
+    }
+    catch(error) {
+      res.status(406).end();
+    }
+  });
+
+  app.post("/delete_pattern", async function(req, res) {
+    console.log("");
+    const {patternId, username} = req.body;
+    if (patternId !== patternId) {
+      console.error("delete_pattern request received with non - numeric patternId query field.");
+      res.status(406).end();
+      return;
+    }
+    try {
+      await deletePattern(patternId, username);
       res.status(202).end();
     }
     catch(error) {
@@ -366,3 +433,4 @@ function main() : void {
 }
 
 main();
+
