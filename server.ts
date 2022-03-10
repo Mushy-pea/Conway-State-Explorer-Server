@@ -270,6 +270,28 @@ async function getCatalogue(searchString : string) : Promise<CatalogueReference[
   return result;
 }
 
+// This function does a recursive runtime type check of the newPattern object to see if a
+// malformed object has been received.
+function checkForPatternPackage(newPattern : PatternPackage) : boolean {
+  const t_name = typeof(newPattern.name);
+  const t_username = typeof(newPattern.username);
+  const t_comments = typeof(newPattern.comments);
+  const t_patternObject_boardArraySize = typeof(newPattern.patternObject.boardArraySize);
+  const t_patternObject_liveCells = typeof(newPattern.patternObject.liveCells);
+  if (t_name !== "string" || t_username !== "string" || t_comments !== "string" ||
+      t_patternObject_boardArraySize !== "number" || t_patternObject_liveCells !== "object") {
+    return false;
+  }
+
+  let liveCellsCorrect = true;
+  newPattern.patternObject.liveCells.forEach(value => {
+    if (typeof(value.i) !== "number" || typeof(value.j) !== "number") {
+      liveCellsCorrect = false;
+    }
+  });
+  return liveCellsCorrect;
+}
+
 // This function queries the database in order to add a new game board pattern.
 function addPatternQuery(connection, newPattern : PatternPackage) : Promise<boolean> {
   const filter = /[A-Za-z0-9 _.-]*/;
@@ -280,16 +302,21 @@ function addPatternQuery(connection, newPattern : PatternPackage) : Promise<bool
   const query = `INSERT INTO pattern_catalogue (Name, Username, Comments, Pattern)
                  VALUES ("${safeName}", "${safeUsername}", "${safeComments}",
                  "${patternString}")`;
-  const queryResolution = new Promise<boolean>((resolve, reject) => {
-    connection.query(query, error => {
-      if (error) {
-        console.error(error);
-        reject(false);
-      }
-      else {
-        resolve(true);
-      }
-    });
+  const queryResolution = new Promise<boolean>((resolve, reject) => { 
+    if (checkForPatternPackage(newPattern) === false) {
+      reject(false);
+    }
+    else {
+      connection.query(query, error => {
+        if (error) {
+          console.error(error);
+          reject(false);
+        }
+        else {
+          resolve(true);
+        }
+      });
+    } 
   });
   return queryResolution;
 }
@@ -403,10 +430,11 @@ function main() : void {
     console.log("");
     try {
       await addPattern(req.body);
-      res.status(202).end();
+      res.status(202).send("A new pattern has been added to the database.").end();
     }
     catch(error) {
-      res.status(406).end();
+      res.status(406).send(`The add_pattern operation encountered the following error: ${error}\n`)
+        .end();
     }
   });
 
@@ -415,15 +443,17 @@ function main() : void {
     const {patternId, username} = req.body;
     if (patternId !== patternId) {
       console.error("delete_pattern request received with non - numeric patternId query field.");
-      res.status(406).end();
+      res.status(406)
+        .send("delete_pattern request received with non - numeric patternId query field.\n").end();
       return;
     }
     try {
       await deletePattern(patternId, username);
-      res.status(202).end();
+      res.status(202).send(`The record with Pattern_id ${patternId} has been deleted.\n`).end();
     }
     catch(error) {
-      res.status(406).end();
+      res.status(406)
+        .send(`The delete_pattern operation encountered the following error: ${error}\n`).end();
     }
   });
 
@@ -433,4 +463,6 @@ function main() : void {
 }
 
 main();
+
+export {PatternPackage};
 

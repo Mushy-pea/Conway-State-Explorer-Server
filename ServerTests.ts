@@ -1,3 +1,5 @@
+import { PatternPackage } from './server';
+
 function getRequest(url : string, filePath : string) : Promise<number> {
   const http = require("http");
   const fs = require("fs");
@@ -20,7 +22,8 @@ function getRequest(url : string, filePath : string) : Promise<number> {
   return pageRequest;
 }
 
-function postRequest(data : string, url : string) : Promise<number> {
+async function postRequest(data : string, url : string) : Promise<number> {
+  const http = require("http");
   const options = {
     hostname: "127.0.0.1",
     port: 8080,
@@ -31,86 +34,56 @@ function postRequest(data : string, url : string) : Promise<number> {
         "Content-Length": data.length
     }
   };
-  const http = require("http");
-  let statusCode;
+  let req;
+  const postResolution = new Promise<number>((resolve, reject) => {
+    req = http.request(options, res => {
+      res.pipe(process.stdout);
 
-  const postEvent = new Promise<number>((resolve, reject) => {
-    const req = http.request(options, res => {
-      statusCode = res.statusCode;
+      res.on("end", () => {
+        resolve(res.statusCode);
+      });
+
+      res.on("error", error => {
+        console.error(error);
+        reject(null);
+      });
     });
-
-    req.on("error", error => {
-      console.error(error);
-      reject(null);
-    });
-
-    req.write(data);
-    req.end();
-    resolve(statusCode);
   });
-  return postEvent;
+
+  req.write(data);
+  req.end();
+  return postResolution;
 }
 
-function testGetPatternRecordFound(data : string) : boolean {
-  const result = JSON.parse(data);
-  const expectedResult = {
-    name: "94P27.1",
-    username: "Steven",
-    comments: `Name: 94P27.1\r\nAuthor: Jason Summers\r\nThe smallest known period 27 oscillator as\
- of April 2009. Found in August 2005.\r\nwww.conwaylife.com/wiki/index.php?\
-title=94P27.1\r\n`,
-    patternObject: {
-      boardArraySize: 17,
-      liveCells: [
-        {"i":-16,"j":-11},{"i":-16,"j":-10},{"i":-15,"j":-11},{"i":-15,"j":-10},{"i":-14,"j":1},
-        {"i":-13,"j":-13},{"i":-13,"j":-12},{"i":-13,"j":-11},{"i":-13,"j":-10},{"i":-13,"j":-9},
-        {"i":-13,"j":-8},{"i":-13,"j":-1},{"i":-13,"j":2},{"i":-12,"j":-14},{"i":-12,"j":-8},
-        {"i":-12,"j":3},{"i":-11,"j":-13},{"i":-11,"j":-9},{"i":-11,"j":-2},{"i":-11,"j":3},
-        {"i":-11,"j":8},{"i":-11,"j":9},{"i":-10,"j":-16},{"i":-10,"j":-15},{"i":-10,"j":-14},
-        {"i":-10,"j":4},{"i":-10,"j":8},{"i":-10,"j":10},{"i":-9,"j":-16},{"i":-9,"j":-13},
-        {"i":-9,"j":-12},{"i":-9,"j":-11},{"i":-9,"j":-10},{"i":-9,"j":-9},{"i":-9,"j":-1},
-        {"i":-9,"j":3},{"i":-9,"j":10},{"i":-9,"j":13},{"i":-9,"j":14},{"i":-8,"j":-13},
-        {"i":-8,"j":-9},{"i":-8,"j":1},{"i":-8,"j":2},{"i":-8,"j":9},{"i":-8,"j":10},
-        {"i":-8,"j":12},{"i":-8,"j":14},{"i":-7,"j":-15},{"i":-7,"j":-13},{"i":-7,"j":-11},
-        {"i":-7,"j":-10},{"i":-7,"j":-3},{"i":-7,"j":-2},{"i":-7,"j":8},{"i":-7,"j":12},
-        {"i":-6,"j":-15},{"i":-6,"j":-14},{"i":-6,"j":-11},{"i":-6,"j":-4},{"i":-6,"j":0},
-        {"i":-6,"j":8},{"i":-6,"j":9},{"i":-6,"j":10},{"i":-6,"j":11},{"i":-6,"j":12},
-        {"i":-6,"j":15},{"i":-5,"j":-11},{"i":-5,"j":-9},{"i":-5,"j":-5},{"i":-5,"j":13},
-        {"i":-5,"j":14},{"i":-5,"j":15},{"i":-4,"j":-10},{"i":-4,"j":-9},{"i":-4,"j":-4},
-        {"i":-4,"j":1},{"i":-4,"j":8},{"i":-4,"j":12},{"i":-3,"j":-4},{"i":-3,"j":7},
-        {"i":-3,"j":13},{"i":-2,"j":-3},{"i":-2,"j":0},{"i":-2,"j":7},{"i":-2,"j":8},{"i":-2,"j":9},
-        {"i":-2,"j":10},{"i":-2,"j":11},{"i":-2,"j":12},{"i":-1,"j":-2},{"i":0,"j":9},
-        {"i":0,"j":10},{"i":1,"j":9},{"i":1,"j":10}
-      ]
+function comparePatternPackage(result : PatternPackage, expectedResult : PatternPackage)
+                              : string {
+  if (result.name !== expectedResult.name) {return "result.name";}
+
+  if (result.username !== expectedResult.username) {return "result.username";}
+
+  if (result.comments !== expectedResult.comments) {return "result.comments";}
+
+  if (result.patternObject.boardArraySize !== expectedResult.patternObject.boardArraySize) {
+    return "result.patternObject.boardArraySize";
+  }
+
+  if (result.patternObject.liveCells.length !== expectedResult.patternObject.liveCells.length) {
+    return "result.patternObject.liveCells.length";
+  }
+  result.patternObject.liveCells.forEach((cell, index) => {
+    const expectedCell = expectedResult.patternObject.liveCells[index];
+    if (cell.i !== expectedCell.i || cell.j !== expectedCell.j) {
+      return `result.patternObject.liveCells[${index}]`;
     }
-  };
+  });
+  return "Pass";
+}
 
-  const testResult = (expectedResult, result) => {
-    if (result.name !== expectedResult.name) {return "result.name";}
-
-    if (result.username !== expectedResult.username) {return "result.username";}
-
-    if (result.comments !== expectedResult.comments) {return "result.comments";}
-
-    if (result.patternObject.boardArraySize !== expectedResult.patternObject.boardArraySize) {
-      return "result.patternObject.boardArraySize";
-    }
-
-    if (result.patternObject.liveCells.length !== expectedResult.patternObject.liveCells.length) {
-      return "result.patternObject.liveCells.length";
-    }
-    result.patternObject.liveCells.forEach((cell, index) => {
-      const expectedCell = expectedResult.patternObject.liveCells[index];
-      if (cell.i !== expectedCell.i || cell.j !== expectedCell.j) {
-        return `result.patternObject.liveCells[${index}]`;
-      }
-    });
-    return "Pass";
-  };
-  
-  const outcome = testResult(expectedResult, result);
+function testGetPatternRecordFound(result : PatternPackage, expectedResult : PatternPackage)
+                                  : boolean {
+  const outcome = comparePatternPackage(result, expectedResult);
   if (outcome === "Pass") {
-    console.log("testGetPatternRecordFound has passed.");
+    console.log("testGetPatternRecordFound has passed");
     return true;
   }
   else {
@@ -195,15 +168,22 @@ function testGetCatalogueEmptyResult(data : string) : boolean {
   }
 }
 
-function testAddPatternValidObject() {
-  
+function testAddPatternValidObject(result : PatternPackage, expectedResult : PatternPackage)
+                                  : boolean {
+  const outcome = comparePatternPackage(result, expectedResult);
+  if (outcome === "Pass") {
+    console.log("testAddPatternValidObject has passed.");
+    return true;
+  }
+  else {
+    console.error(`testAddPatternValidObject has failed on condition ${outcome}`);
+    return false;
+  }
 }
-
-
 
 async function main() : Promise<void> {
   let passes = 0, failures = 0;
-
+  
   // This test checks if a get_pattern request with a valid patternId that exists in the database
   // is correctly handled by the server.
   try {
@@ -216,9 +196,38 @@ async function main() : Promise<void> {
       failures++;
     }
     else {
+      const expectedPackage = {
+        name: "94P27.1",
+        username: "Steven",
+        comments: `Name: 94P27.1\r\nAuthor: Jason Summers\r\nThe smallest known period 27 oscillator as of April 2009. Found in August 2005.\r\nwww.conwaylife.com/wiki/index.php?title=94P27.1\r\n`,
+        patternObject: {
+          boardArraySize: 17,
+          liveCells: [
+            {"i":-16,"j":-11},{"i":-16,"j":-10},{"i":-15,"j":-11},{"i":-15,"j":-10},{"i":-14,"j":1},
+            {"i":-13,"j":-13},{"i":-13,"j":-12},{"i":-13,"j":-11},{"i":-13,"j":-10},{"i":-13,"j":-9},
+            {"i":-13,"j":-8},{"i":-13,"j":-1},{"i":-13,"j":2},{"i":-12,"j":-14},{"i":-12,"j":-8},
+            {"i":-12,"j":3},{"i":-11,"j":-13},{"i":-11,"j":-9},{"i":-11,"j":-2},{"i":-11,"j":3},
+            {"i":-11,"j":8},{"i":-11,"j":9},{"i":-10,"j":-16},{"i":-10,"j":-15},{"i":-10,"j":-14},
+            {"i":-10,"j":4},{"i":-10,"j":8},{"i":-10,"j":10},{"i":-9,"j":-16},{"i":-9,"j":-13},
+            {"i":-9,"j":-12},{"i":-9,"j":-11},{"i":-9,"j":-10},{"i":-9,"j":-9},{"i":-9,"j":-1},
+            {"i":-9,"j":3},{"i":-9,"j":10},{"i":-9,"j":13},{"i":-9,"j":14},{"i":-8,"j":-13},
+            {"i":-8,"j":-9},{"i":-8,"j":1},{"i":-8,"j":2},{"i":-8,"j":9},{"i":-8,"j":10},
+            {"i":-8,"j":12},{"i":-8,"j":14},{"i":-7,"j":-15},{"i":-7,"j":-13},{"i":-7,"j":-11},
+            {"i":-7,"j":-10},{"i":-7,"j":-3},{"i":-7,"j":-2},{"i":-7,"j":8},{"i":-7,"j":12},
+            {"i":-6,"j":-15},{"i":-6,"j":-14},{"i":-6,"j":-11},{"i":-6,"j":-4},{"i":-6,"j":0},
+            {"i":-6,"j":8},{"i":-6,"j":9},{"i":-6,"j":10},{"i":-6,"j":11},{"i":-6,"j":12},
+            {"i":-6,"j":15},{"i":-5,"j":-11},{"i":-5,"j":-9},{"i":-5,"j":-5},{"i":-5,"j":13},
+            {"i":-5,"j":14},{"i":-5,"j":15},{"i":-4,"j":-10},{"i":-4,"j":-9},{"i":-4,"j":-4},
+            {"i":-4,"j":1},{"i":-4,"j":8},{"i":-4,"j":12},{"i":-3,"j":-4},{"i":-3,"j":7},
+            {"i":-3,"j":13},{"i":-2,"j":-3},{"i":-2,"j":0},{"i":-2,"j":7},{"i":-2,"j":8},
+            {"i":-2,"j":9},{"i":-2,"j":10},{"i":-2,"j":11},{"i":-2,"j":12},{"i":-1,"j":-2},
+            {"i":0,"j":9},{"i":0,"j":10},{"i":1,"j":9},{"i":1,"j":10}
+          ]
+        }
+      };
       const fs = require("fs");
-      const data = fs.readFileSync(test1_filePath, "utf8");
-      const result = testGetPatternRecordFound(data);
+      const actualPackage = JSON.parse(fs.readFileSync(test1_filePath, "utf8"));
+      const result = testGetPatternRecordFound(actualPackage, expectedPackage);
       if (result) {passes++;}
       else {failures++;}
     }
@@ -337,6 +346,7 @@ async function main() : Promise<void> {
     if (statusCode !== 200) {
       console.error(`testGetCatalogueEmptyResult has failed with incorrect \
                      status code: ${statusCode}`);
+      failures++;
     }
     else {
       const fs = require("fs");
@@ -351,9 +361,11 @@ async function main() : Promise<void> {
     failures++;
   }
 
+  // This test checks if an add_pattern request with a valid PatternPackage object is correctly
+  // handled by the server.
   try {
     console.log("");
-    const test1_url = "add_pattern";
+    const test1_url = "/add_pattern";
     const patternPackage = {
       name: "Test pattern",
       username: "Steven",
@@ -365,10 +377,54 @@ async function main() : Promise<void> {
     };
     const data = JSON.stringify(patternPackage);
     const statusCode = await postRequest(data, test1_url);
-    console.log(`postRequest returned status code: ${statusCode}`);
+    if (statusCode !== 202) {
+      console.error(`testAddPatternValidObject failed with incorrect status code ${statusCode}`);
+      failures++;
+    }
+    else {
+      const maxPatternId = 2310;
+      await getRequest(`http://localhost:8080/get_pattern?patternId=${maxPatternId + 1}`,
+                       "add_pattern_test1.txt");
+      const fs = require("fs");
+      const actualPackage = JSON.parse(fs.readFileSync("add_pattern_test1.txt", "utf8"));
+      const result = testAddPatternValidObject(actualPackage, patternPackage);
+      if (result) {passes++;}
+      else {failures++;}
+    }
   }
   catch(error) {
-    console.log(`postRequest failed with a generic error: ${error}`);
+    console.error(`testAddPatternValidObject failed with a generic error: ${error}`);
+    failures++;
+  }
+
+  // This test checks if an add_pattern request with a invalid PatternPackage object is correctly
+  // handled by the server.
+  try {
+    console.log("");
+    const test2_url = "/add_pattern";
+    const patternPackage = {
+      name: "Test pattern",
+      username: "Steven",
+      comments: "A pattern used to test the add_pattern API endpoint of the server.",
+      patternObject: {
+        boardArraySize: 3,
+        liveCells: [{i: -1, j: -1}, {i: 0, j: 0}, {i: "blah", j: 1}, {i: 1, j: -1}, {i: 1, j: 0}]
+      }
+    };
+    const data = JSON.stringify(patternPackage);
+    const statusCode = await postRequest(data, test2_url);
+    if (statusCode !== 406) {
+      console.error(`testAddPatternInvalidObject failed with incorrect status code ${statusCode}`);
+      failures++;
+    }
+    else {
+      console.log("testAddPatternInvalidObject has passed.");
+      passes++;
+    }
+  }
+  catch(error) {
+    console.error(`testAddPatternInvalidObject failed with a generic error: ${error}`);
+    failures++;
   }
 
   console.log(`Test results -> Passed: ${passes} Failed: ${failures}`);
