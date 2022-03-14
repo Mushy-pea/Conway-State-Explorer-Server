@@ -22,7 +22,7 @@ function getRequest(url : string, filePath : string) : Promise<number> {
   return pageRequest;
 }
 
-async function postRequest(data : string, url : string) : Promise<number> {
+function postRequest(data : string, url : string) : Promise<number> {
   const http = require("http");
   const options = {
     hostname: "127.0.0.1",
@@ -183,6 +183,14 @@ function testAddPatternValidObject(result : PatternPackage, expectedResult : Pat
 
 async function main() : Promise<void> {
   let passes = 0, failures = 0;
+  const fs = require("fs");
+  let maxPatternId;
+  try {
+    maxPatternId = parseInt(fs.readFileSync("./max_pattern_id.txt", "utf8"));
+  }
+  catch(error) {
+    console.error(`Error opening max_pattern_id.txt: ${error}`);
+  }
   
   // This test checks if a get_pattern request with a valid patternId that exists in the database
   // is correctly handled by the server.
@@ -225,7 +233,6 @@ async function main() : Promise<void> {
           ]
         }
       };
-      const fs = require("fs");
       const actualPackage = JSON.parse(fs.readFileSync(test1_filePath, "utf8"));
       const result = testGetPatternRecordFound(actualPackage, expectedPackage);
       if (result) {passes++;}
@@ -250,7 +257,6 @@ async function main() : Promise<void> {
       failures++;
     }
     else {
-      const fs = require("fs");
       const data = fs.readFileSync(test2_filePath, "utf8");
       const result = testGetPatternRecordNotFound(data);
       if (result) {passes++;}
@@ -274,7 +280,6 @@ async function main() : Promise<void> {
       failures++;
     }
     else {
-      const fs = require("fs");
       const data = fs.readFileSync(test3_filePath, "utf8");
       const result = testGetPatternInvalidId(data);
       if (result) {passes++;}
@@ -299,7 +304,6 @@ async function main() : Promise<void> {
       failures++;
     }
     else {
-      const fs = require("fs");
       const data = fs.readFileSync(test1_filePath, "utf8");
       const result = testGetCatalogueEmptySearchString(data);
       if (result) {passes++;}
@@ -324,7 +328,6 @@ async function main() : Promise<void> {
       failures++;
     }
     else {
-      const fs = require("fs");
       const data = fs.readFileSync(test2_filePath, "utf8");
       const result = testGetCatalogueWithSearchString(data);
       if (result) {passes++;}
@@ -349,7 +352,6 @@ async function main() : Promise<void> {
       failures++;
     }
     else {
-      const fs = require("fs");
       const data = fs.readFileSync(test3_filePath, "utf8");
       const result = testGetCatalogueEmptyResult(data);
       if (result) {passes++;}
@@ -382,13 +384,14 @@ async function main() : Promise<void> {
       failures++;
     }
     else {
-      const maxPatternId = 2310;
       await getRequest(`http://localhost:8080/get_pattern?patternId=${maxPatternId + 1}`,
                        "add_pattern_test1.txt");
-      const fs = require("fs");
       const actualPackage = JSON.parse(fs.readFileSync("add_pattern_test1.txt", "utf8"));
       const result = testAddPatternValidObject(actualPackage, patternPackage);
-      if (result) {passes++;}
+      if (result) {
+        passes++;
+        fs.writeFileSync("./max_pattern_id.txt", `${maxPatternId + 1}`);
+      }
       else {failures++;}
     }
   }
@@ -425,6 +428,65 @@ async function main() : Promise<void> {
   catch(error) {
     console.error(`testAddPatternInvalidObject failed with a generic error: ${error}`);
     failures++;
+  }
+
+  // This test checks if a delete_pattern request with a valid combination of patternId and username
+  // is correctly handled by the server.
+  try {
+    console.log("");
+    const test1_url = "/delete_pattern";
+    const test2_url = `http://localhost:8080/get_pattern?patternId=${maxPatternId + 1}`;
+    const deleteRequest = {
+      patternId: maxPatternId + 1,
+      username: "Steven"
+    };
+    const data = JSON.stringify(deleteRequest);
+    const statusCode = await postRequest(data, test1_url);
+    if (statusCode !== 202) {
+      console.error(`testDeletePatternValidRequest failed with incorrect \
+                     status code ${statusCode}`);
+      failures++;
+    }
+    else {
+      const statusCode = await getRequest(test2_url, "delete_pattern_test1.txt");
+      if (statusCode !== 404) {
+        console.error(`testDeletePatternValidRequest has failed with incorrect \
+                       status code ${statusCode}`);
+        failures++;
+      }
+      else {
+        console.log("testDeletePatternValidRequest has passed.");
+        passes++;
+      }
+    }
+  }
+  catch(error) {
+    console.error(`testDeletePatternValidRequest has failed with a generic error: ${error}`);
+  }
+
+  // This test checks if a delete_pattern request with an invalid combination of patternId
+  // and username is correctly handled by the server.
+  try {
+    console.log("");
+    const test3_url = "/delete_pattern";
+    const deleteRequest = {
+      patternId: 1816,
+      username: "blah"
+    };
+    const data = JSON.stringify(deleteRequest);
+    const statusCode = await postRequest(data, test3_url);
+    if (statusCode !== 406) {
+      console.error(`testDeletePatternInvalidRequest failed with incorrect \
+                     statusCode ${statusCode}`);
+      failures++;
+    }
+    else {
+      console.log("testDeletePatternInvalidRequest has passed.");
+      passes++;
+    }
+  }
+  catch(error) {
+    console.error(`testDeletePatternInvalidRequest has failed with a generic error: ${error}`);
   }
 
   console.log(`Test results -> Passed: ${passes} Failed: ${failures}`);
