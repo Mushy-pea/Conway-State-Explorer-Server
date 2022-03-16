@@ -1,4 +1,15 @@
 /node_modules
+/keys
 *.js
 *.js.map
 *.txt
+*.yaml
+
+local_config.json
+cloud_config.json
+exported_data.json
+MigrateDatabase1.ts
+MigrateDatabase2.ts
+EnvironmentTest.ts
+.gcloudignore
+

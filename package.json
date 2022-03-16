@@ -12,5 +12,8 @@
     "express": "^4.17.3",
     "mysql": "^2.18.1",
     "typescript": "^4.5.5"
+  },
+  "scripts": {
+    "start": "node server.js"
   }
 }

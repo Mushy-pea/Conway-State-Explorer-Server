@@ -116,23 +116,22 @@ function convertPattern(newPattern : PatternObject) : string {
 
 function openDBConnection() : Promise<any> {
   const fs = require("fs");
-  let password = "";
+  let config;
   try {
-    password = fs.readFileSync("./db_password.txt");
+    config = JSON.parse(fs.readFileSync("./cloud_config.json"));
   }
   catch(error) {
-    console.error(`db_password.txt could not be opened.`);
+    console.error(`The config file could not be opened.`);
     return null;
   }
+  config.ssl = {
+    ca: fs.readFileSync(`./keys/ca.pem`),
+    cert: fs.readFileSync(`./keys/client-cert.pem`),
+    key: fs.readFileSync(`./keys/client-key.pem`)
+  };
 
   const mysql = require("mysql");
-  const connection = mysql.createConnection({
-    host: "localhost",
-    user: "Steven",
-    password: password,
-    database: "gol_pattern_catalogue"
-  });
-
+  const connection = mysql.createConnection(config);
   const connectPromise = new Promise<any>((resolve, reject) => {
     connection.connect(error => {
       if (error) {
