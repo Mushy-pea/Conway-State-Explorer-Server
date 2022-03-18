@@ -1,7 +1,7 @@
 // This is the entry point for the application server.
 
-import { resetBoardArray, BoardCell, boardCell, getCellState, setCellState, cellUpdaterFunctions1 }
-from './GameLogicTypes';
+import { resetBoardArray, BoardCell, boardCell, getCellState, setCellState, cellUpdaterFunctions1,
+         PatternObject, PatternPackage, CatalogueReference } from './GameLogicTypes';
 
 // This function takes a string representation of a game board pattern and returns an object
 // containing this pattern as a square array of type BoardCell.  The object also contains the min
@@ -46,21 +46,6 @@ function deserialisePattern(pattern : string)
   });
   return gameBoardObject;
 }
-
-type PatternObject = {
-  boardArraySize : number,
-  liveCells: {
-    i : number,
-    j : number
-  }[]                  
-};
-
-type PatternPackage = {
-  name : string,
-  username : string,
-  comments : string,
-  patternObject: PatternObject
-};
 
 // This function takes the object returned by deserialisePattern and returns a JSON string that
 // represents the game board pattern.  This two stage representation change ensures the pattern
@@ -208,11 +193,6 @@ async function getPattern(patternId : number) : Promise<PatternPackage> {
   });
   return result;
 }
-
-type CatalogueReference = {
-  Pattern_id : number,
-  Name : string
-};
 
 // This function queries the database by Name for catalogue entries that match a search string
 // or retrieves the whole catalogue.
@@ -393,7 +373,7 @@ async function deletePattern(patternId : number, username : string) : Promise<bo
 function main() : void {
   const express = require("express");
   const app = express();
-  const PORT = process.env.PORT || 8080;
+  const PORT = process.env.PORT || 80;
   app.use(express.json());
 
   app.get("/get_pattern", async function(req, res) {
